@@ -74,7 +74,8 @@ export function SentenceReview({ onDone }: { onDone: () => void }) {
         className="flex flex-1 flex-col items-center justify-center px-5 text-center"
       >
         <div className="mb-3 text-xs uppercase tracking-wide text-slate-600">
-          {sentence.theme || 'zin'} · {isCloze ? 'vul in' : 'zeg in het Grieks'}
+          {sentence.theme || 'zin'}
+          {sentence.level ? ` · ${sentence.level}` : ''} · {isCloze ? 'vul in' : 'zeg in het Grieks'}
         </div>
         <div className="text-2xl font-medium leading-snug text-white">{front}</div>
         {isCloze && <div className="mt-3 text-sm text-slate-500">{sentence.nl}</div>}

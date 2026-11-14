@@ -56,11 +56,12 @@ async function doSeed(): Promise<void> {
   })
 }
 
-const SENTENCES_VERSION = 1
+const SENTENCES_VERSION = 2
 interface PresetSentence {
   theme: string
   gr: string
   nl: string
+  level?: string
 }
 const PRESETS = sentencesData as PresetSentence[]
 
@@ -85,6 +86,7 @@ export async function ensureSentences(): Promise<void> {
           gr: p.gr,
           nl: p.nl,
           theme: p.theme,
+          level: p.level,
           source: 'preset',
           createdAt: now.getTime(),
         } as Sentence)

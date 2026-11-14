@@ -105,6 +105,9 @@ export interface SentenceCardJoined {
   sentence: Sentence
 }
 
+// Hoeveel nieuwe zinkaarten je per sessie krijgt (anders staan er honderden klaar).
+const NEW_SENTENCE_LIMIT = 10
+
 export async function buildSentenceQueue(now = Date.now()): Promise<SentenceCardJoined[]> {
   const [cards, sentences] = await Promise.all([db.sentenceCards.toArray(), db.sentences.toArray()])
   const map = new Map(sentences.map((s) => [s.id!, s]))
@@ -114,7 +117,10 @@ export async function buildSentenceQueue(now = Date.now()): Promise<SentenceCard
   const reviews = joined
     .filter((x) => x.card.fsrs.state !== State.New && ms(x.card.fsrs.due) <= now)
     .sort((a, b) => ms(a.card.fsrs.due) - ms(b.card.fsrs.due))
-  const news = joined.filter((x) => x.card.fsrs.state === State.New)
+  const news = joined
+    .filter((x) => x.card.fsrs.state === State.New)
+    .sort((a, b) => (a.sentence.id ?? 0) - (b.sentence.id ?? 0))
+    .slice(0, NEW_SENTENCE_LIMIT)
   return [...reviews, ...news]
 }
 

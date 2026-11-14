@@ -29,6 +29,7 @@ export interface Sentence {
   nl: string
   note?: string
   theme?: string
+  level?: string // A2 / B1 / B2
   source: 'preset' | 'user'
   createdAt: number
 }

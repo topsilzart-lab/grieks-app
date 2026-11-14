@@ -79,7 +79,14 @@ export function Sentences() {
                   {list!.map((s) => (
                     <div key={s.id} className="flex items-start justify-between rounded-xl bg-slate-900 px-4 py-3">
                       <div className="min-w-0">
-                        <div className="truncate text-slate-100">{s.gr}</div>
+                        <div className="flex items-center gap-2">
+                          {s.level && (
+                            <span className="shrink-0 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
+                              {s.level}
+                            </span>
+                          )}
+                          <span className="truncate text-slate-100">{s.gr}</span>
+                        </div>
                         <div className="truncate text-sm text-slate-500">{s.nl}</div>
                       </div>
                       {s.source === 'user' && (
