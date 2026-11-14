@@ -3,11 +3,13 @@ import { db } from '../db/db'
 
 interface Backup {
   app: 'grieks-app'
-  version: 1
+  version: 2
   exportedAt: string
   cards: unknown[]
   chapters: unknown[]
   reviews: unknown[]
+  sentences?: unknown[]
+  sentenceCards?: unknown[]
 }
 
 export function Settings() {
@@ -23,18 +25,22 @@ export function Settings() {
   }, [])
 
   async function exportJson() {
-    const [cards, chapters, reviews] = await Promise.all([
+    const [cards, chapters, reviews, sentences, sentenceCards] = await Promise.all([
       db.cards.toArray(),
       db.chapters.toArray(),
       db.reviews.toArray(),
+      db.sentences.toArray(),
+      db.sentenceCards.toArray(),
     ])
     const backup: Backup = {
       app: 'grieks-app',
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       cards,
       chapters,
       reviews,
+      sentences,
+      sentenceCards,
     }
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -61,14 +67,30 @@ export function Settings() {
         setMsg('Dit lijkt geen geldige backup.')
         return
       }
-      await db.transaction('rw', db.cards, db.chapters, db.reviews, async () => {
-        if (data.cards.length) await db.cards.bulkPut(data.cards as never)
-        if (data.chapters.length) await db.chapters.bulkPut(data.chapters as never)
-        if (data.reviews?.length) {
-          await db.reviews.clear()
-          await db.reviews.bulkAdd(data.reviews as never)
-        }
-      })
+      await db.transaction(
+        'rw',
+        db.cards,
+        db.chapters,
+        db.reviews,
+        db.sentences,
+        db.sentenceCards,
+        async () => {
+          if (data.cards.length) await db.cards.bulkPut(data.cards as never)
+          if (data.chapters.length) await db.chapters.bulkPut(data.chapters as never)
+          if (data.reviews?.length) {
+            await db.reviews.clear()
+            await db.reviews.bulkAdd(data.reviews as never)
+          }
+          if (data.sentences?.length) {
+            await db.sentences.clear()
+            await db.sentences.bulkAdd(data.sentences as never)
+          }
+          if (data.sentenceCards?.length) {
+            await db.sentenceCards.clear()
+            await db.sentenceCards.bulkPut(data.sentenceCards as never)
+          }
+        },
+      )
       setMsg('Voortgang teruggezet.')
     } catch {
       setMsg('Importeren mislukt. Is het bestand wel geldig?')
@@ -124,9 +146,11 @@ export function Settings() {
         <section className="rounded-2xl bg-slate-900 p-4">
           <h2 className="font-medium text-slate-100">Over de data</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Fase 1: ongeveer 146 woorden, klemtonen handmatig gecontroleerd. De volledige 2000
-            woorden, de vervoegingen en de zinnen volgen in de volgende fases. Vertalingen zijn
-            voorlopig en AI-gegenereerd.
+            2000 woorden op frequentie, met woordsoort, geslacht, meervoud en verleden tijd uit
+            Wiktionary (kaikki.org). Voorbeeldzinnen uit Tatoeba (CC BY). Frequentie uit
+            OpenSubtitles. Nederlandse vertalingen zijn AI-gegenereerd; de eerste hoofdstukken zijn
+            vertaald, de rest toont tijdelijk het Engels en volgt nog. De vervoegingen (Module 2)
+            komen in de volgende fase.
           </p>
         </section>
 

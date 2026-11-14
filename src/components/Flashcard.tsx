@@ -56,6 +56,9 @@ export function Flashcard({
           <div className="mt-8 w-full max-w-sm">
             <div className="h-px w-full bg-slate-800" />
             <div className="mt-6 text-3xl font-medium text-emerald-300">{word.nl}</div>
+            {word.englishFallback && (
+              <div className="mt-1 text-xs text-slate-500">Engels (NL volgt)</div>
+            )}
 
             <div className="mt-4 space-y-1 text-sm text-slate-400">
               {word.article && (

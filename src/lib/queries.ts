@@ -1,7 +1,8 @@
 import { db } from '../db/db'
-import type { CardRow, Word } from '../db/types'
+import type { CardRow, Word, Sentence, SentenceCard } from '../db/types'
 import { ms, State } from '../srs/srs'
 import { chapterWordCount } from './seed'
+import { cardsForSentence } from './sentences'
 
 export interface CardWithWord {
   card: CardRow
@@ -95,4 +96,70 @@ export async function getFavorites(): Promise<CardWithWord[]> {
     .filter((c) => c.favorite)
     .map((c) => ({ card: c, word: wordMap.get(c.wordId)! }))
     .filter((x) => x.word)
+}
+
+// --- Module 3: zinnen ---
+
+export interface SentenceCardJoined {
+  card: SentenceCard
+  sentence: Sentence
+}
+
+export async function buildSentenceQueue(now = Date.now()): Promise<SentenceCardJoined[]> {
+  const [cards, sentences] = await Promise.all([db.sentenceCards.toArray(), db.sentences.toArray()])
+  const map = new Map(sentences.map((s) => [s.id!, s]))
+  const joined = cards
+    .map((c) => ({ card: c, sentence: map.get(c.sentenceId)! }))
+    .filter((x) => x.sentence)
+  const reviews = joined
+    .filter((x) => x.card.fsrs.state !== State.New && ms(x.card.fsrs.due) <= now)
+    .sort((a, b) => ms(a.card.fsrs.due) - ms(b.card.fsrs.due))
+  const news = joined.filter((x) => x.card.fsrs.state === State.New)
+  return [...reviews, ...news]
+}
+
+export async function getSentenceCounts(now = Date.now()) {
+  const q = await buildSentenceQueue(now)
+  const due = q.filter((x) => x.card.fsrs.state !== State.New).length
+  return { total: q.length, due, nieuw: q.length - due }
+}
+
+export async function listSentences(): Promise<Sentence[]> {
+  return db.sentences.toArray()
+}
+
+export async function addUserSentence(gr: string, nl: string, note?: string): Promise<void> {
+  const id = (await db.sentences.add({
+    gr: gr.trim(),
+    nl: nl.trim(),
+    note: note?.trim() || undefined,
+    source: 'user',
+    createdAt: Date.now(),
+  } as Sentence)) as number
+  const s = await db.sentences.get(id)
+  if (s) await db.sentenceCards.bulkAdd(cardsForSentence(s))
+}
+
+/** Bulkimport: regels in de vorm `grieks | nederlands`. Geeft aantal terug. */
+export async function bulkImportSentences(text: string): Promise<number> {
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+  let n = 0
+  for (const line of lines) {
+    const idx = line.indexOf('|')
+    if (idx === -1) continue
+    const gr = line.slice(0, idx).trim()
+    const nl = line.slice(idx + 1).trim()
+    if (!gr || !nl) continue
+    await addUserSentence(gr, nl)
+    n++
+  }
+  return n
+}
+
+export async function deleteSentence(id: number): Promise<void> {
+  await db.sentenceCards.where('sentenceId').equals(id).delete()
+  await db.sentences.delete(id)
 }

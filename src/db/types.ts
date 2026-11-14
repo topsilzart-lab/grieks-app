@@ -13,7 +13,36 @@ export interface Word {
   past?: string // verledentijdsvorm bij werkwoorden
   exampleGr?: string
   exampleNl?: string
+  exampleId?: string // Tatoeba-zin-id (bronvermelding)
+  englishFallback?: boolean // NL nog niet vertaald; toont Engelse gloss
   generated: boolean // vertaling door AI gegenereerd
+}
+
+export interface Meta {
+  key: string
+  value: unknown
+}
+
+export interface Sentence {
+  id?: number
+  gr: string
+  nl: string
+  note?: string
+  theme?: string
+  source: 'preset' | 'user'
+  createdAt: number
+}
+
+export type SentenceCardKind = 'nl-gr' | 'cloze'
+
+export interface SentenceCard {
+  id: string // `${sentenceId}:${kind}`
+  sentenceId: number
+  kind: SentenceCardKind
+  clozeWord?: string
+  fsrs: FsrsCard
+  favorite: boolean
+  flagged: boolean
 }
 
 export type Direction = 'gr-nl'

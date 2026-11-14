@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { ensureSeeded } from './lib/seed'
+import { ensureSeeded, ensureSentences } from './lib/seed'
 import { BottomNav, type Tab } from './components/BottomNav'
 import { Today } from './screens/Today'
 import { Favorites } from './screens/Favorites'
 import { Settings } from './screens/Settings'
 import { Review } from './screens/Review'
+import { Sentences } from './screens/Sentences'
 
 export default function App() {
   const [ready, setReady] = useState(false)
@@ -13,6 +14,7 @@ export default function App() {
 
   useEffect(() => {
     ensureSeeded()
+      .then(() => ensureSentences())
       .then(() => setReady(true))
       .catch((e) => {
         console.error(e)
@@ -38,6 +40,8 @@ export default function App() {
           <Review onDone={() => setReviewing(false)} />
         ) : tab === 'today' ? (
           <Today onStart={() => setReviewing(true)} />
+        ) : tab === 'sentences' ? (
+          <Sentences />
         ) : tab === 'favorites' ? (
           <Favorites />
         ) : (

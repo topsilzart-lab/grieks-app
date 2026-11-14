@@ -1,49 +1,33 @@
 import { createEmptyCard } from 'ts-fsrs'
 import { db } from '../db/db'
-import type { Word, CardRow, ChapterState } from '../db/types'
-import { seedWords } from '../data/seedWords'
+import type { Word, CardRow, ChapterState, Sentence } from '../db/types'
+import wordsData from '../data/words.json'
+import sentencesData from '../data/sentences.json'
+import { cardsForSentence } from './sentences'
 
 const CHAPTER_SIZE = 100
-// Hoeveel woorden van hoofdstuk 1 staan standaard aan bij de allereerste start.
 const DEFAULT_FIRST_CHAPTER_ACTIVE = 8
+// Verhoog dit als de woordenlijst inhoudelijk verandert -> bestaande installs
+// krijgen dan de nieuwe lijst (voortgang begint opnieuw).
+const DATA_VERSION = 2
+
+const WORDS = wordsData as unknown as Word[]
 
 // Guard tegen dubbele aanroep (React StrictMode roept effects 2x aan in dev).
 let seedPromise: Promise<void> | null = null
 
-/** Vult de database bij de eerste start. Doet niets als er al woorden zijn. */
 export function ensureSeeded(): Promise<void> {
   if (!seedPromise) seedPromise = doSeed()
   return seedPromise
 }
 
 async function doSeed(): Promise<void> {
-  const existing = await db.words.count()
-  if (existing > 0) return
+  const current = (await db.meta.get('seedVersion'))?.value
+  if (current === DATA_VERSION) return
 
   const now = new Date()
 
-  const words: Word[] = seedWords.map((w, i) => {
-    const rank = i + 1
-    const chapter = Math.ceil(rank / CHAPTER_SIZE)
-    const idxInChapter = (rank - 1) % CHAPTER_SIZE
-    return {
-      id: rank,
-      rank,
-      chapter,
-      idxInChapter,
-      lemma: w.lemma,
-      pos: w.pos,
-      nl: w.nl,
-      article: w.article,
-      plural: w.plural,
-      past: w.past,
-      exampleGr: w.ex,
-      exampleNl: w.exNl,
-      generated: true,
-    }
-  })
-
-  const cards: CardRow[] = words.map((w) => ({
+  const cards: CardRow[] = WORDS.map((w) => ({
     id: `${w.id}:gr-nl`,
     wordId: w.id,
     chapter: w.chapter,
@@ -54,24 +38,71 @@ async function doSeed(): Promise<void> {
     flagged: false,
   }))
 
-  const chapterNrs = [...new Set(words.map((w) => w.chapter))].sort((a, b) => a - b)
+  const chapterNrs = [...new Set(WORDS.map((w) => w.chapter))].sort((a, b) => a - b)
   const chapters: ChapterState[] = chapterNrs.map((c, i) => ({
     chapter: c,
     activeCount: i === 0 ? DEFAULT_FIRST_CHAPTER_ACTIVE : 0,
   }))
 
-  await db.transaction('rw', db.words, db.cards, db.chapters, async () => {
-    // Nog een keer checken binnen de transactie, voor de zekerheid.
-    if ((await db.words.count()) > 0) return
-    await db.words.bulkPut(words)
+  await db.transaction('rw', db.words, db.cards, db.chapters, db.meta, async () => {
+    // Woordenlijst verving -> opnieuw opbouwen (voortgang reset).
+    await db.words.clear()
+    await db.cards.clear()
+    await db.chapters.clear()
+    await db.words.bulkPut(WORDS)
     await db.cards.bulkPut(cards)
     await db.chapters.bulkPut(chapters)
+    await db.meta.put({ key: 'seedVersion', value: DATA_VERSION })
+  })
+}
+
+const SENTENCES_VERSION = 1
+interface PresetSentence {
+  theme: string
+  gr: string
+  nl: string
+}
+const PRESETS = sentencesData as PresetSentence[]
+
+/** Seed de thema-zinnen en zorgt dat elke zin kaarten heeft. */
+export async function ensureSentences(): Promise<void> {
+  const now = new Date()
+  const current = (await db.meta.get('sentencesVersion'))?.value
+
+  await db.transaction('rw', db.sentences, db.sentenceCards, db.meta, async () => {
+    if (current !== SENTENCES_VERSION) {
+      // Oude presets + hun kaarten weg, nieuwe presets erin (eigen zinnen blijven).
+      const presets = await db.sentences.where('source').equals('preset').toArray()
+      const presetIds = new Set(presets.map((s) => s.id))
+      await db.sentences.where('source').equals('preset').delete()
+      const toRemove = (await db.sentenceCards.toArray())
+        .filter((c) => presetIds.has(c.sentenceId))
+        .map((c) => c.id)
+      if (toRemove.length) await db.sentenceCards.bulkDelete(toRemove)
+
+      for (const p of PRESETS) {
+        await db.sentences.add({
+          gr: p.gr,
+          nl: p.nl,
+          theme: p.theme,
+          source: 'preset',
+          createdAt: now.getTime(),
+        } as Sentence)
+      }
+      await db.meta.put({ key: 'sentencesVersion', value: SENTENCES_VERSION })
+    }
+
+    // Kaarten aanvullen voor zinnen die er nog geen hebben.
+    const sentences = await db.sentences.toArray()
+    const have = new Set((await db.sentenceCards.toArray()).map((c) => c.id))
+    const toAdd = sentences.flatMap((s) => cardsForSentence(s, now)).filter((c) => !have.has(c.id))
+    if (toAdd.length) await db.sentenceCards.bulkAdd(toAdd)
   })
 }
 
 /** Aantal woorden per hoofdstuk (voor de max van de slider). */
 export function chapterWordCount(chapter: number): number {
-  return seedWords.filter((_, i) => Math.ceil((i + 1) / CHAPTER_SIZE) === chapter).length
+  return WORDS.filter((w) => w.chapter === chapter).length
 }
 
 export { CHAPTER_SIZE }
