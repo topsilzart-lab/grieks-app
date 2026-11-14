@@ -1,0 +1,98 @@
+import { db } from '../db/db'
+import type { CardRow, Word } from '../db/types'
+import { ms, State } from '../srs/srs'
+import { chapterWordCount } from './seed'
+
+export interface CardWithWord {
+  card: CardRow
+  word: Word
+}
+
+export interface ChapterStat {
+  chapter: number
+  max: number // aantal woorden in het hoofdstuk
+  activeCount: number
+  learned: number // kaarten in State.Review binnen de actieve set
+  due: number // nu te herhalen
+  newCount: number // actief maar nog niet gestart
+}
+
+async function loadAll() {
+  const [cards, words, chapters] = await Promise.all([
+    db.cards.toArray(),
+    db.words.toArray(),
+    db.chapters.toArray(),
+  ])
+  const wordMap = new Map(words.map((w) => [w.id, w]))
+  const activeByChapter = new Map(chapters.map((c) => [c.chapter, c.activeCount]))
+  return { cards, words, chapters, wordMap, activeByChapter }
+}
+
+/** Kaarten die momenteel actief zijn (binnen de slider-stand van hun hoofdstuk). */
+export async function getActiveCards(): Promise<CardWithWord[]> {
+  const { cards, wordMap, activeByChapter } = await loadAll()
+  return cards
+    .filter((c) => c.idxInChapter < (activeByChapter.get(c.chapter) ?? 0))
+    .map((c) => ({ card: c, word: wordMap.get(c.wordId)! }))
+    .filter((x) => x.word)
+}
+
+/** De reviewrij: eerst te herhalen kaarten (op due), daarna nieuwe. */
+export async function buildQueue(now = Date.now()): Promise<CardWithWord[]> {
+  const active = await getActiveCards()
+  const reviews = active
+    .filter((a) => a.card.fsrs.state !== State.New && ms(a.card.fsrs.due) <= now)
+    .sort((a, b) => ms(a.card.fsrs.due) - ms(b.card.fsrs.due))
+  const news = active
+    .filter((a) => a.card.fsrs.state === State.New)
+    .sort((a, b) => a.word.rank - b.word.rank)
+  return [...reviews, ...news]
+}
+
+export async function getChapterStats(now = Date.now()): Promise<ChapterStat[]> {
+  const { cards, chapters, activeByChapter } = await loadAll()
+  return chapters
+    .sort((a, b) => a.chapter - b.chapter)
+    .map((ch) => {
+      const activeCount = activeByChapter.get(ch.chapter) ?? 0
+      const inChapter = cards.filter((c) => c.chapter === ch.chapter)
+      const active = inChapter.filter((c) => c.idxInChapter < activeCount)
+      return {
+        chapter: ch.chapter,
+        max: chapterWordCount(ch.chapter),
+        activeCount,
+        learned: active.filter((c) => c.fsrs.state === State.Review).length,
+        due: active.filter((c) => c.fsrs.state !== State.New && ms(c.fsrs.due) <= now).length,
+        newCount: active.filter((c) => c.fsrs.state === State.New).length,
+      }
+    })
+}
+
+export async function getTodayCounts(now = Date.now()) {
+  const q = await buildQueue(now)
+  const due = q.filter((x) => x.card.fsrs.state !== State.New).length
+  const nieuw = q.length - due
+  return { total: q.length, due, nieuw }
+}
+
+export async function setActiveCount(chapter: number, n: number) {
+  await db.chapters.update(chapter, { activeCount: Math.max(0, Math.round(n)) })
+}
+
+export async function toggleFavorite(cardId: string) {
+  const c = await db.cards.get(cardId)
+  if (c) await db.cards.update(cardId, { favorite: !c.favorite })
+}
+
+export async function toggleFlag(cardId: string) {
+  const c = await db.cards.get(cardId)
+  if (c) await db.cards.update(cardId, { flagged: !c.flagged })
+}
+
+export async function getFavorites(): Promise<CardWithWord[]> {
+  const { cards, wordMap } = await loadAll()
+  return cards
+    .filter((c) => c.favorite)
+    .map((c) => ({ card: c, word: wordMap.get(c.wordId)! }))
+    .filter((x) => x.word)
+}
