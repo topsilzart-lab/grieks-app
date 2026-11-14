@@ -1,5 +1,15 @@
 import Dexie, { type Table } from 'dexie'
-import type { Word, CardRow, ReviewLog, ChapterState, Meta, Sentence, SentenceCard } from './types'
+import type {
+  Word,
+  CardRow,
+  ReviewLog,
+  ChapterState,
+  Meta,
+  Sentence,
+  SentenceCard,
+  Verb,
+  VerbCard,
+} from './types'
 
 export class GreekDB extends Dexie {
   words!: Table<Word, number>
@@ -9,6 +19,8 @@ export class GreekDB extends Dexie {
   meta!: Table<Meta, string>
   sentences!: Table<Sentence, number>
   sentenceCards!: Table<SentenceCard, string>
+  verbs!: Table<Verb, number>
+  verbCards!: Table<VerbCard, string>
 
   constructor() {
     super('grieks-app')
@@ -33,6 +45,17 @@ export class GreekDB extends Dexie {
       meta: 'key',
       sentences: '++id, theme, source',
       sentenceCards: 'id, sentenceId, kind',
+    })
+    this.version(4).stores({
+      words: 'id, rank, chapter',
+      cards: 'id, wordId, chapter, favorite, flagged',
+      reviews: '++id, cardId, ts',
+      chapters: 'chapter',
+      meta: 'key',
+      sentences: '++id, theme, source',
+      sentenceCards: 'id, sentenceId, kind',
+      verbs: 'id, chapter, group',
+      verbCards: 'id, verbId, kind',
     })
   }
 }

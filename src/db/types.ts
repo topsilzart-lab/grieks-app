@@ -46,6 +46,32 @@ export interface SentenceCard {
   flagged: boolean
 }
 
+// --- Module 2: vervoegingen ---
+
+export type VerbGroup = 'A' | 'B1' | 'B2' | 'mediopassief' | 'onregelmatig'
+
+export interface Verb {
+  id: number // = id van het woord in Module 1 (koppeling)
+  lemma: string
+  nl: string
+  chapter: number
+  group: VerbGroup
+  present: string[] | null // 6 vormen: ik/jij/hij/wij/jullie/zij
+  aorist: string | null // verleden tijd, 1e persoon (stamtijd)
+  future: string | null // 'θα ...', 1e persoon
+}
+
+export type VerbCardKind = 'present' | 'aorist' | 'future'
+
+export interface VerbCard {
+  id: string // `${verbId}:${kind}`
+  verbId: number
+  kind: VerbCardKind
+  fsrs: FsrsCard
+  favorite: boolean
+  flagged: boolean
+}
+
 export type Direction = 'gr-nl'
 
 export interface CardRow {

@@ -1,8 +1,9 @@
-export type Tab = 'today' | 'sentences' | 'favorites' | 'settings'
+export type Tab = 'today' | 'sentences' | 'verbs' | 'favorites' | 'settings'
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'today', label: 'Vandaag', icon: '◉' },
   { id: 'sentences', label: 'Zinnen', icon: '💬' },
+  { id: 'verbs', label: 'Vervoeg.', icon: '⇄' },
   { id: 'favorites', label: 'Favorieten', icon: '★' },
   { id: 'settings', label: 'Instellingen', icon: '⚙' },
 ]
@@ -10,7 +11,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 export function BottomNav({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
   return (
     <nav className="safe-bottom border-t border-slate-800 bg-slate-950">
-      <div className="grid grid-cols-4">
+      <div className="grid grid-cols-5">
         {TABS.map((t) => (
           <button
             key={t.id}

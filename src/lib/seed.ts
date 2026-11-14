@@ -1,9 +1,11 @@
 import { createEmptyCard } from 'ts-fsrs'
 import { db } from '../db/db'
-import type { Word, CardRow, ChapterState, Sentence } from '../db/types'
+import type { Word, CardRow, ChapterState, Sentence, Verb } from '../db/types'
 import wordsData from '../data/words.json'
 import sentencesData from '../data/sentences.json'
+import verbsData from '../data/verbs.json'
 import { cardsForSentence } from './sentences'
+import { cardsForVerb } from './verbs'
 
 const CHAPTER_SIZE = 100
 const DEFAULT_FIRST_CHAPTER_ACTIVE = 8
@@ -99,6 +101,30 @@ export async function ensureSentences(): Promise<void> {
     const have = new Set((await db.sentenceCards.toArray()).map((c) => c.id))
     const toAdd = sentences.flatMap((s) => cardsForSentence(s, now)).filter((c) => !have.has(c.id))
     if (toAdd.length) await db.sentenceCards.bulkAdd(toAdd)
+  })
+}
+
+// --- Module 2: vervoegingen ---
+const VERBS_VERSION = 1
+const VERBS = verbsData as unknown as Verb[]
+
+/** Seed de werkwoorden en zorgt dat elk werkwoord zijn drill-kaarten heeft. */
+export async function ensureVerbs(): Promise<void> {
+  const now = new Date()
+  const current = (await db.meta.get('verbsVersion'))?.value
+
+  await db.transaction('rw', db.verbs, db.verbCards, db.meta, async () => {
+    if (current !== VERBS_VERSION) {
+      await db.verbs.clear()
+      await db.verbCards.clear()
+      await db.verbs.bulkPut(VERBS)
+      await db.meta.put({ key: 'verbsVersion', value: VERBS_VERSION })
+    }
+    // Kaarten aanvullen voor werkwoorden die er nog geen hebben.
+    const verbs = await db.verbs.toArray()
+    const have = new Set((await db.verbCards.toArray()).map((c) => c.id))
+    const toAdd = verbs.flatMap((v) => cardsForVerb(v, now)).filter((c) => !have.has(c.id))
+    if (toAdd.length) await db.verbCards.bulkAdd(toAdd)
   })
 }
 
