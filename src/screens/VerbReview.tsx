@@ -62,7 +62,7 @@ export function VerbReview({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between px-4 py-3">
+      <div className="safe-top flex items-center justify-between px-4 py-3">
         <button onClick={onDone} className="text-sm text-slate-400 active:text-slate-200">
           ← Stop
         </button>
