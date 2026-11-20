@@ -9,9 +9,12 @@ import { cardsForVerb } from './verbs'
 
 const CHAPTER_SIZE = 100
 const DEFAULT_FIRST_CHAPTER_ACTIVE = 8
-// Verhoog dit als de woordenlijst inhoudelijk verandert -> bestaande installs
-// krijgen dan de nieuwe lijst (voortgang begint opnieuw).
+// Verhoog dit als de woordenLIJST van samenstelling verandert (andere/meer
+// woorden) -> bestaande installs krijgen de nieuwe lijst (voortgang reset).
 const DATA_VERSION = 2
+// Verhoog dit als alleen de INHOUD van bestaande woorden wijzigt (betekenis,
+// voorbeeld e.d.): de velden worden ververst, maar kaarten/voortgang blijven.
+const CONTENT_VERSION = 1
 
 const WORDS = wordsData as unknown as Word[]
 
@@ -25,7 +28,11 @@ export function ensureSeeded(): Promise<void> {
 
 async function doSeed(): Promise<void> {
   const current = (await db.meta.get('seedVersion'))?.value
-  if (current === DATA_VERSION) return
+  if (current === DATA_VERSION) {
+    // Lijst ongewijzigd: alleen de woordinhoud (betekenissen) bijwerken.
+    await refreshWordContent()
+    return
+  }
 
   const now = new Date()
 
@@ -55,6 +62,23 @@ async function doSeed(): Promise<void> {
     await db.cards.bulkPut(cards)
     await db.chapters.bulkPut(chapters)
     await db.meta.put({ key: 'seedVersion', value: DATA_VERSION })
+    await db.meta.put({ key: 'wordsContentVersion', value: CONTENT_VERSION })
+  })
+}
+
+/**
+ * Ververst alleen de inhoud van bestaande woorden (betekenis, voorbeeld,
+ * lidwoord, enz.) zonder de kaarten of voortgang aan te raken. Draait als de
+ * lijst qua samenstelling gelijk blijft maar de betekenissen zijn gecorrigeerd.
+ */
+async function refreshWordContent(): Promise<void> {
+  const contentVersion = (await db.meta.get('wordsContentVersion'))?.value
+  if (contentVersion === CONTENT_VERSION) return
+  await db.transaction('rw', db.words, db.meta, async () => {
+    // bulkPut werkt bestaande rijen (zelfde id) bij; kaarten verwijzen naar id
+    // en blijven dus geldig, FSRS-voortgang blijft bewaard.
+    await db.words.bulkPut(WORDS)
+    await db.meta.put({ key: 'wordsContentVersion', value: CONTENT_VERSION })
   })
 }
 
